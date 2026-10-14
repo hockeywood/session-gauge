@@ -1,0 +1,12 @@
+{
+  "name": "session-gauge",
+  "owner": {
+    "name": "hockeywood"
+  },
+  "plugins": [
+    {
+      "name": "session-gauge",
+      "source": "./"
+    }
+  ]
+}
