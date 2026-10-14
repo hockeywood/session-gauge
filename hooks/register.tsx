@@ -64,30 +64,6 @@ function until(ms: number) {
   return h < 48 ? `${h}h ${m % 60}m` : `${Math.round(h / 24)}d`
 }
 
-// The full gauge as plain lines, for /gauge.
-export function readout(g: Gauge, now: number): string {
-  const a = advice(g.context)
-  const lines = [`Context ${pct(g.context)}: ${a.text}`]
-  lines.push(
-    g.turnsLeft !== null
-      ? `Replies left before ${NEW_SESSION_AT}%: ~${g.turnsLeft} at ~${g.growth!.toFixed(1)} points per reply (projected)`
-      : 'Replies left: needs two more replies to estimate',
-  )
-  for (const kind of ['five_hour', 'seven_day'] as const) {
-    const w = g.windows.find(x => x.kind === kind)
-    if (!w) {
-      lines.push(`${LABEL[kind]}: not read yet`)
-      continue
-    }
-    const reset = w.resetsAt ? `, resets in ${until(w.resetsAt - now)}` : ''
-    const proj = w.projected !== null ? `, on pace for ~${Math.round(w.projected)}% at reset (projected)` : ''
-    lines.push(`${LABEL[kind]}: ${pct(w.percent)} used${reset}${proj}`)
-  }
-  const src = g.source === 'live' ? 'live from Anthropic' : g.source === 'reply' ? 'from the last reply' : 'not yet'
-  lines.push(`Limits read ${src}. Compact from ${COMPACT_AT}%, new session from ${NEW_SESSION_AT}%.`)
-  return lines.join('\n')
-}
-
 function toWindows(limits: SessionRateLimit[], now: number): Window[] {
   const out: Window[] = []
   for (const kind of ['five_hour', 'seven_day'] as const) {
@@ -159,21 +135,15 @@ async function apply($: EngineInterface, context: number | undefined, limits: Se
   if (level !== prior) await update($, warned, () => level)
 }
 
-// Live limits when Anthropic's usage service answers; otherwise the limits the last reply
-// carried, so the gauge has figures at once (a cloud session's live read is refused).
 async function refreshLive($: EngineInterface) {
-  const live = await fetchLimits($)
+  const limits = await fetchLimits($)
   let context: number | undefined
-  let fromReply: SessionRateLimit[] = []
   try {
-    const usage = await $.session.usage()
-    context = usage.context.percent
-    fromReply = usage.rateLimits
+    context = (await $.session.usage()).context.percent
   } catch {
     context = undefined
   }
-  if (live) await apply($, context, live, 'live', false)
-  else await apply($, context, fromReply.length ? fromReply : null, 'reply', false)
+  await apply($, context, limits, 'live', false)
 }
 
 function compactNow($: EngineInterface): void {
@@ -190,7 +160,7 @@ function compactNow($: EngineInterface): void {
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'gauge', description: 'Print the session gauge (context, 5h and weekly limits, projections); /gauge on or off shows or hides the band' })
+    await $.command.register({ name: 'gauge', description: 'Show or hide the session gauge above the prompt' })
     const r = await next(e)
     history = []
     await refreshLive($)
@@ -203,15 +173,10 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // /gauge prints the readout as a reply, which shows on every surface (a cloud session in the
-  // desktop app draws no band); /gauge on and /gauge off show or hide the band where one is drawn.
-  on('command.run', { command: 'gauge' }, async ($, e) => {
-    const arg = e.args.trim().toLowerCase()
-    if (arg === 'on' || arg === 'off') {
-      await update($, isOn, () => arg === 'on')
-      return { text: arg === 'on' ? 'Session gauge band on.' : 'Session gauge band off.' }
-    }
-    return { text: readout(await read($, gauge), await $.clock.now()) }
+  on('command.run', { command: 'gauge' }, async $ => {
+    const now = !(await read($, isOn))
+    await update($, isOn, () => now)
+    return { text: now ? 'Session gauge on.' : 'Session gauge off.' }
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
