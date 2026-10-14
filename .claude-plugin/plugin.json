@@ -1,6 +1,6 @@
 {
   "name": "session-gauge",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Context fill, turns left, and 5-hour and weekly usage with a projected end-of-window figure, above the prompt, with a Compact button",
   "author": {
     "name": "hockeywood"

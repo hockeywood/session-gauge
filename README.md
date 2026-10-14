@@ -1,6 +1,6 @@
 # session-gauge
 
-A band above the Claude Code prompt that shows how full the context window is, your 5-hour and weekly plan usage with reset times, a projected end-of-window figure, and roughly how many replies are left before the session should be compacted or restarted. A Compact button runs /compact when you press it. Type /gauge to hide or show the band.
+A band above the Claude Code prompt that shows how full the context window is, your 5-hour and weekly plan usage with reset times, a projected end-of-window figure, and roughly how many replies are left before the session should be compacted or restarted. A Compact button runs /compact when you press it. Type /gauge to print the full readout as a reply, which works everywhere, including a cloud session in the desktop app, where no band is drawn. Type /gauge off or /gauge on to hide or show the band.
 
 Context colours: green under 60%, amber from 60% (compact at the next break), red from 80% (start a new session).
 
