@@ -6,6 +6,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionRateLimit } from 'claude-code'
 
 import type { Gauge, Window } from '../types'
+import { feedPanel } from './panel'
 
 const empty: Gauge = { context: null, growth: null, turnsLeft: null, windows: [], source: 'none', readAt: null }
 const gauge = atom({ plugin: 'session-gauge', key: 'gauge' } as const, empty)
@@ -133,17 +134,25 @@ async function apply($: EngineInterface, context: number | undefined, limits: Se
     $.ui.toast(level === 2 ? `Context ${pct(ctx)}: start a new session` : `Context ${pct(ctx)}: compact at the next break`)
   }
   if (level !== prior) await update($, warned, () => level)
+  // the 2-minute refresh always writes to the panel; replies write at most every 30 seconds
+  void feedPanel($, next, !isReply)
 }
 
+// Live limits when Anthropic's usage service answers; otherwise the limits the last reply
+// carried (a cloud session's live read is refused), so the gauge has figures at once.
 async function refreshLive($: EngineInterface) {
-  const limits = await fetchLimits($)
+  const live = await fetchLimits($)
   let context: number | undefined
+  let fromReply: SessionRateLimit[] = []
   try {
-    context = (await $.session.usage()).context.percent
+    const usage = await $.session.usage()
+    context = usage.context.percent
+    fromReply = usage.rateLimits
   } catch {
     context = undefined
   }
-  await apply($, context, limits, 'live', false)
+  if (live) await apply($, context, live, 'live', false)
+  else await apply($, context, fromReply.length ? fromReply : null, 'reply', false)
 }
 
 function compactNow($: EngineInterface): void {
